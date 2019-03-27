@@ -1,0 +1,399 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "RabbitMQ Cluster",
+    "Conditions": {},
+    "Parameters": {
+        "MaxSize": {
+            "Type": "Number",
+            "Default": "4",
+            "Description": "Auto Scaling group maximum size"
+        },
+        "StartSize": {
+            "Type": "Number",
+            "Default": "2",
+            "Description": "Number of instances to launch in RabbitMQ cluster"
+        },
+        "InstanceType": {
+            "Description": "The EC2 instance type",
+            "Type": "String",
+            "Default": "t2.small",
+            "AllowedValues": [
+                "t2.micro",
+                "t2.small",
+                "t2.medium",
+                "t3.micro",
+                "t3.small",
+                "t3.medium",
+                "m3.medium",
+                "m3.large",
+                "m3.xlarge",
+                "m3.2xlarge"
+            ],
+            "ConstraintDescription": "Must be a valid EC2 instance type."
+        },
+        "KeyName": {
+            "Type": "AWS::EC2::KeyPair::KeyName",
+            "Description": "Name of an existing SSH EC2 KeyPair"
+        },
+        "VpcId" : {
+            "Type" : "AWS::EC2::VPC::Id",
+            "Description" : "VpcId of existing Virtual Private Cloud (VPC)"
+        },
+        "Subnets" : {
+            "Type" : "List<AWS::EC2::Subnet::Id>",
+            "Description" : "Subnet IDs in Virtual Private Cloud (VPC)"
+        },
+        "RabbitMQUsername" : {
+            "Description" : "The RabbitMQ username",
+            "Type" : "String",
+            "MinLength" : "1",
+            "MaxLength" : "64",
+            "AllowedPattern" : "^[a-zA-Z0-9]*$"
+        },
+        "RabbitMQPassword" : {
+            "NoEcho" : "true",
+            "Description" : "The RabbitMQ password",
+            "Type" : "String",
+            "MinLength" : "8",
+            "MaxLength" : "64",
+            "AllowedPattern" : "^[a-zA-Z0-9]*$"
+        }
+    },
+    "Outputs": {},
+    "Resources": {
+        "RabbitMQClusterRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Path": "/"
+            }
+        },
+        "RabbitMQClusterPolicy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": "RabbitMQClusterPolicy",
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "autoscaling:DescribeAutoScalingGroups",
+                                "autoscaling:DescribeAutoScalingInstances",
+                                "ec2:DescribeInstances",
+                                "ssm:UpdateInstanceInformation"
+                            ],
+                            "Resource": [
+                                "*"
+                            ]
+                        }
+                    ]
+                },
+                "Roles": [
+                    {
+                        "Ref": "RabbitMQClusterRole"
+                    }
+                ]
+            }
+        },
+        "RabbitMQClusterInstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Path": "/",
+                "Roles": [
+                    {
+                        "Ref": "RabbitMQClusterRole"
+                    }
+                ]
+            }
+        },
+        "RabbitMQClusterSecurityGroupIngress": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Enable access to the RabbitMQ cluster",
+                "SecurityGroupIngress": [
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "IpProtocol": "tcp",
+                        "FromPort": "4369",
+                        "ToPort": "4369"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "IpProtocol": "tcp",
+                        "FromPort": "5671",
+                        "ToPort": "5671"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "IpProtocol": "tcp",
+                        "FromPort": "5672",
+                        "ToPort": "5672"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "IpProtocol": "tcp",
+                        "FromPort": "15672",
+                        "ToPort": "15672"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "IpProtocol": "tcp",
+                        "FromPort": "25672",
+                        "ToPort": "25672"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "IpProtocol": "tcp",
+                        "FromPort": "4369",
+                        "ToPort": "4369"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "IpProtocol": "tcp",
+                        "FromPort": "5671",
+                        "ToPort": "5671"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "IpProtocol": "tcp",
+                        "FromPort": "5672",
+                        "ToPort": "5672"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "IpProtocol": "tcp",
+                        "FromPort": "15672",
+                        "ToPort": "15672"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "IpProtocol": "tcp",
+                        "FromPort": "25672",
+                        "ToPort": "25672"
+                    }
+                ],
+                "VpcId" : { 
+                    "Ref" : "VpcId" 
+                }
+            }
+        },
+        "RabbitMQClusterSecurityGroupEgress": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Enable access to the RabbitMQ cluster",
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "0",
+                        "ToPort": "65535",
+                        "DestinationSecurityGroupId" : { "Ref" : "RabbitMQClusterSecurityGroupIngress" }
+                    }
+                ],
+                "VpcId" : { 
+                    "Ref" : "VpcId" 
+                }
+            }
+        },
+        "RabbitMQClusterSecurityGroupMisc": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Enable misc access to and from RabbitMQ instances",
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "80",
+                        "ToPort": "80",
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "443",
+                        "ToPort": "443",
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "udp",
+                        "FromPort": "123",
+                        "ToPort": "123",
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "VpcId" : { 
+                    "Ref" : "VpcId" 
+                }
+            }
+        },
+        "RabbitMQClusterELB": {
+            "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+            "Properties": {
+                "Subnets": {
+                    "Ref" : "Subnets"
+                },
+				"SecurityGroups": [{
+					"Ref": "RabbitMQClusterSecurityGroupIngress"
+                },
+                {
+					"Ref": "RabbitMQClusterSecurityGroupEgress"
+				}],
+                "Scheme" : "internal",
+                "CrossZone": true,
+                "Listeners": [
+                    {
+                        "LoadBalancerPort": "5672",
+                        "InstancePort": "5672",
+                        "Protocol": "TCP"
+                    },
+                    {
+                        "LoadBalancerPort": "15672",
+                        "InstancePort": "15672",
+                        "Protocol": "HTTP"
+                    }
+                ],
+                "HealthCheck": {
+                    "Target": "HTTP:15672/",
+                    "HealthyThreshold": "2",
+                    "UnhealthyThreshold": "3",
+                    "Interval": "30",
+                    "Timeout": "5"
+                }
+            }
+        },
+        "RabbitMQClusterLaunchConfig": {
+            "Type": "AWS::AutoScaling::LaunchConfiguration",
+            "Metadata" : {
+                "AWS::CloudFormation::Init" : {
+                    "config" : {
+                        "files" : {
+                            "/tmp/rabbmitmq_install.sh" : {
+                                "content" : { "Fn::Join" : [ "", [
+                                    "#!/bin/bash\n",
+                                    "sudo wget -O - https://github.com/rabbitmq/signing-keys/releases/download/2.0/rabbitmq-release-signing-key.asc | sudo apt-key add -\n",
+                                    "sudo apt-get install -y apt-transport-https\n",
+                                    "sudo tee /etc/apt/sources.list.d/bintray.rabbitmq.list <<EOF\n",
+                                    "deb https://dl.bintray.com/rabbitmq-erlang/debian $(lsb_release -cs) erlang\n",
+                                    "deb https://dl.bintray.com/rabbitmq/debian $(lsb_release -cs) main\n",
+                                    "EOF\n",
+                                    "sudo apt-get update\n",
+                                    "sudo apt-get install -y rabbitmq-server\n",
+                                    "sudo rabbitmq-plugins enable rabbitmq_management rabbitmq_peer_discovery_aws\n",
+                                    "sudo tee /etc/rabbitmq/rabbitmq.conf <<EOF\n",
+                                    "cluster_formation.peer_discovery_backend = rabbit_peer_discovery_aws\n",
+                                    "cluster_formation.aws.use_autoscaling_group = true\n",
+                                    "cluster_formation.aws.region = ", {"Ref" : "AWS::Region"}, "\n",
+                                    "cluster_formation.node_cleanup.interval = 60\n",
+                                    "EOF\n",
+                                    "systemctl stop rabbitmq-server\n",
+                                    "echo WAVHZTHKKWJMYAXETGTC | sudo tee /var/lib/rabbitmq/.erlang.cookie\n",
+                                    "systemctl start rabbitmq-server\n",
+                                    "rabbitmqctl stop_app\n",
+                                    "rabbitmqctl reset\n",
+                                    "rabbitmqctl start_app\n",
+                                    "rabbitmqctl add_user ", {"Ref" : "RabbitMQUsername"}, " ", {"Ref" : "RabbitMQPassword"}, "\n",
+                                    "rabbitmqctl delete_user guest\n",
+                                    "rabbitmqctl set_user_tags ", {"Ref" : "RabbitMQUsername"}, " administrator\n",
+                                    "rabbitmqctl set_permissions -p / ", {"Ref" : "RabbitMQUsername"}, " \".*\" \".*\" \".*\"\n",
+                                    "rabbitmqctl set_policy -p / ha-all \".*?\" '{\"ha-mode\":\"all\",\"ha-sync-mode\":\"automatic\"}'\n"
+                                ]]},
+                                "mode"  : "000600",
+                                "owner" : "root",
+                                "group" : "root"
+                                }
+                        },
+                        "commands" : {
+                            "01" : { 
+                                "command" : "bash /tmp/rabbmitmq_install.sh"
+                            }
+                        }
+                    }
+                }
+            },
+            "Properties": {
+                "ImageId": "ami-0b0a60c0a2bd40612",
+                "InstanceMonitoring": true,
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "IamInstanceProfile": {
+                    "Ref": "RabbitMQClusterInstanceProfile"
+                },
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+				"SecurityGroups": [{
+					"Ref": "RabbitMQClusterSecurityGroupIngress"
+                },
+                {
+					"Ref": "RabbitMQClusterSecurityGroupEgress"
+				},
+                {
+					"Ref": "RabbitMQClusterSecurityGroupMisc"
+				}],
+                "UserData" : { "Fn::Base64" : { "Fn::Join" : [ "", [
+                    "#!/bin/bash -v\n",
+                    "apt-get update\n",
+                    "apt-get -y install python-setuptools python-pip\n",
+                    "python /usr/lib/python2.7/dist-packages/easy_install.py https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz\n",
+                    "cfn-init -v",
+                    " --stack ", { "Ref": "AWS::StackName" },
+                    " --resource RabbitMQClusterLaunchConfig",
+                    " --region ", { "Ref": "AWS::Region" }, "\n"     
+                ]]}}
+            }
+        },
+        "RabbitMQClusterAutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",       
+            "Properties": {
+                "VPCZoneIdentifier": {
+                    "Ref" : "Subnets"
+                },
+                "DesiredCapacity": {
+                    "Ref": "StartSize"
+                },
+                "MinSize": 2,
+                "MaxSize": {
+                    "Ref": "MaxSize"
+                },
+                "HealthCheckGracePeriod": 300,
+                "HealthCheckType": "ELB",
+                "LaunchConfigurationName": {
+                    "Ref": "RabbitMQClusterLaunchConfig"
+                },
+                "LoadBalancerNames": [
+                    {
+                        "Ref": "RabbitMQClusterELB"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "RabbitMQServerInstance",
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "Service",
+                        "Value": "RabbitMQ",
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            }
+        }
+    }
+}
